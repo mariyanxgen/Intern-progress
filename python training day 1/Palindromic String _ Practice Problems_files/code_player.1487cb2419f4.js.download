@@ -1,0 +1,188 @@
+/**
+ * @file: code_player.js
+ * This file implements code player.
+ */
+
+var CodePlayer = (function() {
+    return function(options) {
+        /**
+         * @var code record url
+         */
+        this.record_url;
+
+        /**
+         * @var code player default options
+         */
+        this.options = {
+            schedule_record_after: 3000,
+        };
+
+        /**
+         * @var animate_save func (Provided by react code editors)
+         */
+        if (options !== undefined && options.animate_save !== undefined)
+            this.animate_save = options.animate_save;
+        else
+            this.animate_save = null;
+
+        /**
+         * @var changeset_queue
+         *
+         * Contains delta and timestamp of changeset
+         */
+        this.changeset_queue = [];
+
+        /**
+         * @var record_settimeout_id
+         */
+        this.record_settimeout_id = null;
+
+        this.final_code = null;
+        
+        /**
+         * In case of nextwork failure, record request stucks in retry.
+         * after success we mannualy need to trigger start recording
+         */
+        this.is_record_pending = false;
+
+        // merge options
+        $.extend(this.options, options);
+
+        /**
+         * Enqueues changeset in changeset queue.
+         */
+        this.enqueue_changeset = function(delta, source, timestamp, finalCode) {
+
+            // We are conditionally setting the timestamp value to maintain the original
+            // value of timestamp since I am not sure from where else this method is being
+            // called and I had to make this change in a hurry
+
+            if (delta) {
+                var changeset = {
+                    delta: delta,
+                    source: source,
+                    timestamp: timestamp ? timestamp : new Date().getTime()
+                };
+    
+                this.changeset_queue.push(changeset);
+            }
+            this.final_code = finalCode;
+
+            return true;
+        };
+
+        /**
+         * @arg record_after in milliseconds
+         *
+         * Starts recording changesets in server after
+         * given milliseconds.
+         */
+
+        this.setRecordUrl = function(url) {
+            this.record_url = url;
+        }
+
+        this.isSetupDone = function() {
+            return !!this.record_url
+        }
+
+        this.restartRecordingAfterNetworkLost = function() {
+            if(this.is_record_pending) {
+                this.is_record_pending = false;
+                this.start_recording(0)
+            }
+        }
+
+        this.is_recording_code_player = false
+        this.start_recording = function(record_after) {
+            // stop recording unless previous request succeeds.
+            if (g_record_request_failed) {
+                this.is_record_pending = true;
+                return;
+            }
+            
+            if(!this.record_url)
+                return;
+            
+            var callback = this.restartRecordingAfterNetworkLost.bind(this);
+            this.is_recording_code_player = true
+
+            this.stop_recording();
+            var code_player = this;
+
+            var record = (function() {
+                return function() {
+                    var changeset_queue = code_player.changeset_queue;
+                    var record_url = code_player.record_url;
+                    var changeset_queue_length = changeset_queue.length;
+                    var finalCode = code_player.final_code;
+                    var changesets = null;
+                    if(changeset_queue_length) {
+                        changesets = changeset_queue.splice(0, changeset_queue_length);
+                    }
+                        var retry = 0;
+                        record_changesets(changesets,
+                                          finalCode,
+                                          record_url, 
+                                          retry,
+                                          callback,
+                                          code_player.animate_save);
+                        code_player.is_recording_code_player = false
+                };
+            })(code_player);
+
+            if(record_after === undefined)
+                record_after = this.options['schedule_record_after'];
+
+            this.record_settimeout_id = setTimeout(record, record_after);
+        };
+
+        /**
+         * Stops recording.
+         */
+        this.stop_recording = function() {
+            if(this.is_recording())
+                clearTimeout(this.record_settimeout_id);
+            this.record_settimeout_id = null;
+        };
+
+        /**
+         * Checks if record settimeout id is set.
+         * If yes, it means record_changeset will be
+         * called after sometime.
+         * @return bool
+         */
+        this.is_recording = function() {
+            if(this.record_settimeout_id)
+                return true;
+            else
+                return false;
+        };
+
+        /**
+         * @arg callback function
+         * 
+         * Finishes recording without any delay i.e.
+         * zero settimeout and syncronus ajax request.
+         * @return bool
+         */
+        this.finish_recording = function(callback) {
+            var changeset_queue = this.changeset_queue;
+            var record_url = this.record_url;
+            var changeset_queue_length = changeset_queue.length;
+            var finalCode = this.final_code;
+            var changesets = null;
+            if(changeset_queue_length) {
+                changesets = changeset_queue.splice(0, changeset_queue_length);
+            }
+            var retry = 0;
+            
+            record_changesets(changesets,
+                        finalCode,
+                        record_url, 
+                        retry,
+                        callback,
+                        this.animate_save);
+        };
+    }
+})();

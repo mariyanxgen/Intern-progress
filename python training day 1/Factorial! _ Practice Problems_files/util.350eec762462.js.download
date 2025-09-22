@@ -1,0 +1,82 @@
+// Holds the div element that contains info regarding all the langs/tabs
+if(typeof($tabs) === "undefined") {
+    var $tabs = {};
+}
+
+// Currently selected language/tab
+// Use get_current_tab_id() if you need the current active tab
+// This var is only used for initialization of the editor
+if(typeof(current_tab_id) === "undefined") {
+    var current_tab_id = null;
+}
+
+// Shows which problem's editor is currently in focus/visible to the user
+// Don't rely very highly on this, use it as a last option
+// Pass private_url_hash in function if you need one
+// This is global and if user initiates multiple code editor instances
+// before the first is finished, the initialization of first one will fail
+// if you use the data of this var
+if(typeof(active_private_url_hash) === "undefined") {
+    var active_private_url_hash = null;
+}
+
+// Contains information about each and every language of
+// every editor instance present in the DOM
+if(typeof(tabs_info) === "undefined") {
+    var tabs_info = {};
+}
+
+// Contains all the editor instances present in the DOM
+// key: private_url_hash of the problem
+// value: ace editor instance
+if(typeof(editor_global) === "undefined") {
+    var editor_global = {};
+}
+
+// Contains the element that shows the position of cursor in the editor
+// for every editor instance
+// key: private_url_hash of the problem
+// value: div element for that problem's editor
+if(typeof(editor_cursor_info) === "undefined") {
+    var editor_cursor_info = {};
+}
+
+// Other editor variables independent of the problem instance
+// to which the editor is linked with
+var current_theme = null;
+var debug = false;
+var MIN_LINES = 25;
+var MAX_LINES = 60;
+var validNavigation = false;
+var LOCALSTORAGE_EXPIRATION = 2; // in hours
+var langKeywordsFunc = null;
+
+/**
+ * Finishes all recordings without any delay.
+ * @return record count
+ */
+function finish_all_recordings() {
+    var record_count = 0;
+    for(var i in tabs_info) {
+        if(tabs_info[i].code_player) {
+            var recorded = tabs_info[i].code_player.finish_recording();
+            if(recorded)
+                record_count += 1;
+        }
+    }
+    return record_count;
+}
+
+/**
+ * Detects browser close and handles any cleanup required
+ * like calling finish_recording.
+ */
+window.addEventListener("beforeunload", function (e) {
+    var record_count = finish_all_recordings();
+
+    if(record_count) {
+        var confirmationMessage = "Your code changes are not yet saved.";
+        (e || window.event).returnValue = confirmationMessage; //Gecko + IE
+        return confirmationMessage; // Webkit, Safari, Chrome etc.
+    }
+});
